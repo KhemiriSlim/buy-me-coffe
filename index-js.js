@@ -4,11 +4,14 @@ import {
   createPublicClient,
   parseEther,
   defineChain,
+  formatEther,
 } from "https://esm.sh/viem";
 import { contractAddress, abi } from "./constant-js.js";
 const connectBtn = document.getElementById("connectBtn");
 const funButton = document.getElementById("fundButton");
 const ethAmount = document.getElementById("ethamount");
+const balanceButton = document.getElementById("getBalanceBtn");
+const withdrawButton = document.getElementById("withdrawButton");
 let walletClient;
 let publicClient;
 async function connect() {
@@ -24,8 +27,8 @@ async function connect() {
 }
 
 async function fund() {
-  const ehtAmountValue = ethAmount.value;
-  console.log(`Funding with ${ehtAmountValue} ETH`);
+  const ethAmountValue = ethAmount.value;
+  console.log(`Funding with ${ethAmountValue} ETH`);
   if (typeof window.ethereum !== "undefined") {
     walletClient = createWalletClient({
       transport: custom(window.ethereum),
@@ -36,14 +39,16 @@ async function fund() {
     publicClient = createPublicClient({
       transport: custom(window.ethereum),
     });
-    await publicClient.simulateContract({
+    const { request } = await publicClient.simulateContract({
       address: contractAddress,
       abi: abi,
       functionName: "fund",
       account: connectedAccount,
-      chaine: currentChain,
+      chain: currentChain,
       value: parseEther(ethAmountValue),
     });
+    const hash = await walletClient.writeContract(request);
+    console.log("Transaction sent! Hash:", hash);
   } else {
     connectBtn.innerText = "Please install MetaMask!";
   }
@@ -67,5 +72,51 @@ async function getCurrentChain(client) {
   });
   return currentChain;
 }
+
+async function getBalance(){
+  if (typeof window.ethereum !== "undefined") {
+    publicClient = createPublicClient({
+      transport: custom(window.ethereum),
+    });
+  }
+  const balance = await publicClient.getBalance({
+    address: contractAddress,
+  })
+  console.log(formatEther(balance));
+}
+
+async function withdraw() {
+  console.log(`Withdrawing...`)
+
+  if (typeof window.ethereum !== "undefined") {
+    try {
+      walletClient = createWalletClient({
+        transport: custom(window.ethereum),
+      })
+      publicClient = createPublicClient({
+        transport: custom(window.ethereum),
+      })
+      const [account] = await walletClient.requestAddresses()
+      const currentChain = await getCurrentChain(walletClient)
+
+      console.log("Processing transaction...")
+      const { request } = await publicClient.simulateContract({
+        account,
+        address: contractAddress,
+        abi,
+        functionName: "withdraw",
+        chain: currentChain,
+      })
+      const hash = await walletClient.writeContract(request)
+      console.log("Transaction processed: ", hash)
+    } catch (error) {
+      console.log(error)
+    }
+  } else {
+    withdrawButton.innerHTML = "Please install MetaMask"
+  }
+}
 connectBtn.onclick = connect;
 funButton.onclick = fund;
+balanceButton.onclick = getBalance;
+withdrawButton.onclick = withdraw;
